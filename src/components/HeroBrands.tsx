@@ -97,11 +97,12 @@ function VideoBackground({
 }
 
 /* ─── HubSpot Configuration ─── */
-const HUBSPOT_PORTAL_ID = "YOUR_PORTAL_ID";   // Replace with your HubSpot portal ID
-const HUBSPOT_FORM_GUID = "YOUR_FORM_GUID";   // Replace with your HubSpot form GUID
+const HUBSPOT_PORTAL_ID = "45247805";   // brightDigital
+const HUBSPOT_FORM_GUID = "e7396cce-336d-4ea2-b117-293745bd7761";
 
 interface JoinFormData {
   firstName: string;
+  lastName: string;
   phone: string;
   email: string;
   plateNumber: string;
@@ -240,34 +241,28 @@ function getRegionLabel(country: string): string {
 }
 
 async function submitToHubSpot(data: JoinFormData) {
+  // Build full phone with country dial code
+  const country = COUNTRIES.find((c) => c.code === data.country);
+  const dialCode = country?.dialCode || "+1";
+  const rawDigits = data.phone.replace(/\D/g, "");
+  const fullPhone = rawDigits ? `${dialCode}${rawDigits}` : "";
+
   const fields = [
-    { name: "phone", value: data.phone },
-    ...(data.firstName ? [{ name: "firstname", value: data.firstName }] : []),
-    ...(data.email ? [{ name: "email", value: data.email }] : []),
-    ...(data.plateNumber ? [{ name: "plate_number", value: data.plateNumber }] : []),
-    ...(data.country ? [{ name: "country", value: data.country }] : []),
-    ...(data.region ? [{ name: "state", value: data.region }] : []),
+    { name: "firstname", value: data.firstName },
+    { name: "lastname", value: data.lastName },
+    { name: "email", value: data.email },
+    { name: "phone", value: fullPhone },
+    { name: "plate_number", value: data.plateNumber },
+    { name: "country", value: data.country },
+    { name: "state", value: data.region },
     { name: "sms_opt_in", value: String(data.optIn) },
-  ];
+  ].filter((f) => f.value); // Only send fields that have values
 
   const payload = {
     fields,
     context: {
       pageUri: typeof window !== "undefined" ? window.location.href : "",
       pageName: "PLAT3S — Join Us",
-    },
-    legalConsentOptions: {
-      consent: {
-        consentToProcess: true,
-        text: "I agree to receive text messages and emails from PLAT3S.",
-        communications: [
-          {
-            value: data.optIn,
-            subscriptionTypeId: 999, // Replace with your HubSpot subscription type ID
-            text: "I agree to receive text messages and emails from PLAT3S about product updates and launch notifications.",
-          },
-        ],
-      },
     },
   };
 
@@ -288,6 +283,7 @@ async function submitToHubSpot(data: JoinFormData) {
 function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [form, setForm] = useState<JoinFormData>({
     firstName: "",
+    lastName: "",
     phone: "",
     email: "",
     plateNumber: "",
@@ -374,12 +370,12 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     >
       <div
         className="relative w-[92vw] max-w-lg overflow-y-auto"
-        style={{ animation: "fadeIn 0.3s ease-out", backgroundColor: '#000', padding: '48px 40px', maxHeight: '90vh' }}
+        style={{ animation: "fadeIn 0.3s ease-out", backgroundColor: '#000', padding: '32px 32px', maxHeight: '90vh' }}
       >
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-6 text-white/60 hover:text-white text-xl leading-none transition-colors"
+          className="absolute top-5 right-6 text-white/60 hover:text-white text-xl leading-none transition-colors cursor-pointer"
           aria-label="Close"
           style={{ fontFamily: 'AvenirNext, sans-serif', zIndex: 10 }}
         >
@@ -574,14 +570,14 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           <>
         {/* Logo */}
         <h2
-          className="text-white text-3xl tracking-[0.3em] uppercase text-center mb-3"
+          className="text-white text-2xl tracking-[0.3em] uppercase text-center mb-2"
           style={{ fontFamily: "LandRoverWeb-Bold, sans-serif" }}
         >
           PLAT3S
         </h2>
 
         {/* Divider */}
-        <div className="mx-auto w-16 h-px bg-white/30" style={{ marginBottom: '28px' }} />
+        <div className="mx-auto w-16 h-px bg-white/30" style={{ marginBottom: '16px' }} />
 
         {status === "success" ? (
           <div className="text-center py-10 animate-fadeIn">
@@ -591,31 +587,43 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
         ) : (
           <>
             {/* Copy */}
-            <p className="text-white/90 text-sm leading-[1.9]" style={{ fontFamily: 'AvenirNext, sans-serif', textAlign: 'justify', marginBottom: '40px', padding: '0 8px' }}>
-              The world looks different from behind the wheel. Join&nbsp;us and
-              be among the first to experience another way to see the&nbsp;world,
-              connect with fellow drivers, and unlock what&apos;s waiting around
-              the next&nbsp;corner.
+            <p className="text-white/90 text-sm leading-[1.7]" style={{ fontFamily: 'AvenirNext, sans-serif', textAlign: 'justify', marginBottom: '20px', padding: '0 4px' }}>
+              More than a dashcam. Connect your car, save, and discover.
+              Enjoy exclusive driver offers, deals while you&apos;re on
+              the road, PLAT3S.com member-only events &amp;&nbsp;more.
+              Join&nbsp;us.
             </p>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-0" style={{ fontFamily: 'AvenirNext, sans-serif' }}>
-              {/* First Name */}
-              <div className="relative" style={{ marginBottom: '28px' }}>
-                <label className="block text-white/60 text-[11px] tracking-[0.15em] uppercase mb-2" style={{ paddingLeft: '4px' }}>First Name</label>
-                <input
-                  type="text"
-                  value={form.firstName}
-                  onChange={(e) => update("firstName", e.target.value)}
-                  className="w-full bg-transparent border-0 border-b border-white/30 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/60 transition-colors"
-                  style={{ paddingLeft: '4px' }}
-                />
+            <form onSubmit={handleSubmit} className="flex flex-col" style={{ fontFamily: 'AvenirNext, sans-serif', gap: '14px' }}>
+              {/* First Name & Last Name */}
+              <div className="flex gap-4">
+                <div className="relative flex-1">
+                  <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>First Name</label>
+                  <input
+                    type="text"
+                    value={form.firstName}
+                    onChange={(e) => update("firstName", e.target.value)}
+                    className="w-full bg-transparent border-0 border-b border-white/25 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/60 transition-colors"
+                    style={{ paddingLeft: '2px', paddingBottom: '6px' }}
+                  />
+                </div>
+                <div className="relative flex-1">
+                  <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>Last Name</label>
+                  <input
+                    type="text"
+                    value={form.lastName}
+                    onChange={(e) => update("lastName", e.target.value)}
+                    className="w-full bg-transparent border-0 border-b border-white/25 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/60 transition-colors"
+                    style={{ paddingLeft: '2px', paddingBottom: '6px' }}
+                  />
+                </div>
               </div>
 
               {/* Phone */}
-              <div className="relative" style={{ marginBottom: '28px' }}>
-                <label className="block text-white/60 text-[11px] tracking-[0.15em] uppercase mb-2" style={{ paddingLeft: '4px' }}>Phone Number <span className="text-white/80">*</span></label>
-                <div className="flex items-center" style={{ gap: '8px' }}>
-                  <span className="text-white/40 text-sm shrink-0" style={{ paddingLeft: '4px', minWidth: '36px' }}>
+              <div className="relative">
+                <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>Phone Number <span className="text-white/70">*</span></label>
+                <div className="flex items-center border-b border-white/25 focus-within:border-white/60 transition-colors" style={touched.phone && errors.phone ? { borderColor: 'rgba(248,113,113,0.5)' } : {}}>
+                  <span className="text-white/35 text-[13px] shrink-0" style={{ paddingLeft: '2px' }}>
                     {COUNTRIES.find((c) => c.code === form.country)?.dialCode || "+1"}
                   </span>
                   <input
@@ -624,81 +632,81 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
                     onChange={(e) => handlePhoneChange(e.target.value)}
                     onBlur={() => handleBlur("phone")}
                     required
-                    className={`w-full bg-transparent border-0 border-b py-2 text-sm text-white placeholder:text-white/20 focus:outline-none transition-colors ${touched.phone && errors.phone ? 'border-red-400/70 focus:border-red-400' : 'border-white/30 focus:border-white/60'}`}
-                    style={{ paddingLeft: '4px' }}
+                    className="w-full bg-transparent border-0 text-[13px] text-white placeholder:text-white/20 focus:outline-none"
+                    style={{ paddingLeft: '6px', paddingBottom: '6px' }}
                   />
                 </div>
                 {touched.phone && errors.phone && (
-                  <p className="text-red-400/80 text-[11px]" style={{ marginTop: '6px', paddingLeft: '4px' }}>{errors.phone}</p>
+                  <p className="text-red-400/70 text-[10px]" style={{ marginTop: '4px', paddingLeft: '2px' }}>{errors.phone}</p>
                 )}
               </div>
 
               {/* Email */}
-              <div className="relative" style={{ marginBottom: '28px' }}>
-                <label className="block text-white/60 text-[11px] tracking-[0.15em] uppercase mb-2" style={{ paddingLeft: '4px' }}>Email</label>
+              <div className="relative">
+                <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>Email</label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => update("email", e.target.value)}
                   onBlur={() => handleBlur("email")}
-                  className={`w-full bg-transparent border-0 border-b py-2 text-sm text-white placeholder:text-white/20 focus:outline-none transition-colors ${touched.email && errors.email ? 'border-red-400/70 focus:border-red-400' : 'border-white/30 focus:border-white/60'}`}
-                  style={{ paddingLeft: '4px' }}
+                  className="w-full bg-transparent border-0 border-b border-white/25 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/60 transition-colors"
+                  style={{ paddingLeft: '2px', paddingBottom: '6px', ...(touched.email && errors.email ? { borderColor: 'rgba(248,113,113,0.5)' } : {}) }}
                 />
                 {touched.email && errors.email && (
-                  <p className="text-red-400/80 text-[11px]" style={{ marginTop: '6px', paddingLeft: '4px' }}>{errors.email}</p>
+                  <p className="text-red-400/70 text-[10px]" style={{ marginTop: '4px', paddingLeft: '2px' }}>{errors.email}</p>
                 )}
               </div>
 
-              {/* Country */}
-              <div className="relative" style={{ marginBottom: '28px' }}>
-                <label className="block text-white/60 text-[11px] tracking-[0.15em] uppercase mb-2" style={{ paddingLeft: '4px' }}>Country</label>
-                <select
-                  value={form.country}
-                  onChange={(e) => update("country", e.target.value)}
-                  className="w-full bg-transparent border-0 border-b border-white/30 py-2 text-sm text-white focus:outline-none focus:border-white/60 transition-colors appearance-none cursor-pointer"
-                  style={{ paddingLeft: '4px', backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center' }}
-                >
-                  {COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code} style={{ backgroundColor: '#000', color: '#fff' }}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Region / State / Province */}
-              {REGIONS[form.country] && (
-                <div className="relative" style={{ marginBottom: '28px' }}>
-                  <label className="block text-white/60 text-[11px] tracking-[0.15em] uppercase mb-2" style={{ paddingLeft: '4px' }}>{getRegionLabel(form.country)}</label>
+              {/* Country & Region side by side */}
+              <div className="flex gap-4">
+                <div className="relative flex-1">
+                  <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>Country</label>
                   <select
-                    value={form.region}
-                    onChange={(e) => update("region", e.target.value)}
-                    className="w-full bg-transparent border-0 border-b border-white/30 py-2 text-sm text-white focus:outline-none focus:border-white/60 transition-colors appearance-none cursor-pointer"
-                    style={{ paddingLeft: '4px', backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center' }}
+                    value={form.country}
+                    onChange={(e) => update("country", e.target.value)}
+                    className="w-full border-0 border-b border-white/25 text-[13px] text-white focus:outline-none focus:border-white/60 transition-colors appearance-none cursor-pointer"
+                    style={{ paddingLeft: '2px', paddingBottom: '6px', backgroundColor: 'transparent', backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L4 4L7 1' stroke='rgba(255,255,255,0.3)' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center' }}
                   >
-                    <option value="" style={{ backgroundColor: '#000', color: '#fff' }}>Select {getRegionLabel(form.country).toLowerCase()}...</option>
-                    {REGIONS[form.country].map((r) => (
-                      <option key={r.code} value={r.code} style={{ backgroundColor: '#000', color: '#fff' }}>{r.name}</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code} style={{ backgroundColor: '#111', color: '#fff' }}>{c.name}</option>
                     ))}
                   </select>
                 </div>
-              )}
+                {REGIONS[form.country] && (
+                  <div className="relative flex-1">
+                    <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>{getRegionLabel(form.country)}</label>
+                    <select
+                      value={form.region}
+                      onChange={(e) => update("region", e.target.value)}
+                      className="w-full border-0 border-b border-white/25 text-[13px] text-white focus:outline-none focus:border-white/60 transition-colors appearance-none cursor-pointer"
+                      style={{ paddingLeft: '2px', paddingBottom: '6px', backgroundColor: 'transparent', backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L4 4L7 1' stroke='rgba(255,255,255,0.3)' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 2px center' }}
+                    >
+                      <option value="" style={{ backgroundColor: '#111', color: '#fff' }}>Select...</option>
+                      {REGIONS[form.country].map((r) => (
+                        <option key={r.code} value={r.code} style={{ backgroundColor: '#111', color: '#fff' }}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
 
               {/* Plate Number */}
-              <div className="relative" style={{ marginBottom: '28px' }}>
-                <label className="block text-white/60 text-[11px] tracking-[0.15em] uppercase mb-2" style={{ paddingLeft: '4px' }}>Plate Number</label>
+              <div className="relative">
+                <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>Plate Number</label>
                 <input
                   type="text"
                   value={form.plateNumber}
                   onChange={(e) => update("plateNumber", e.target.value)}
-                  className="w-full bg-transparent border-0 border-b border-white/30 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/60 transition-colors"
-                  style={{ paddingLeft: '4px' }}
+                  className="w-full bg-transparent border-0 border-b border-white/25 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/60 transition-colors"
+                  style={{ paddingLeft: '2px', paddingBottom: '6px' }}
                 />
               </div>
 
               {/* Required note */}
-              <p className="text-white/50 text-[11px] tracking-wide" style={{ marginBottom: '16px', paddingLeft: '4px' }}>* Required</p>
+              <p className="text-white/40 text-[10px] tracking-wide" style={{ paddingLeft: '2px' }}>* Required</p>
 
               {/* Opt-in checkbox */}
-              <label className="flex items-start gap-3 cursor-pointer group" style={{ marginBottom: '28px', padding: '0 4px' }}>
+              <label className="flex items-start gap-3 cursor-pointer group" style={{ padding: '0 2px' }}>
                 <div className="relative mt-0.5 shrink-0">
                   <input
                     type="checkbox"
@@ -706,20 +714,20 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
                     onChange={(e) => update("optIn", e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-[18px] h-[18px] border border-white/40 peer-checked:border-white/70 peer-checked:bg-white/10 transition-colors flex items-center justify-center">
+                  <div className="w-4 h-4 border border-white/30 peer-checked:border-white/60 peer-checked:bg-white/10 transition-colors flex items-center justify-center">
                     {form.optIn && (
-                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      <svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     )}
                   </div>
                 </div>
-                <span className="text-white/60 text-[12px] leading-[1.7] group-hover:text-white/80 transition-colors" style={{ textAlign: 'justify' }}>
+                <span className="text-white/50 text-[11px] leading-[1.6] group-hover:text-white/70 transition-colors" style={{ textAlign: 'justify' }}>
                   I consent to PLAT3S contacting me by text message and email
                   regarding product updates and launch notifications, subject to
                   its{' '}
                   <button
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPolicy(true); }}
-                    className="underline text-white/80 hover:text-white transition-colors"
+                    className="underline text-white/70 hover:text-white transition-colors"
                   >
                     Privacy Policy
                   </button>
@@ -732,7 +740,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
                 type="submit"
                 disabled={status === "submitting"}
                 className="w-full bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 disabled:opacity-40"
-                style={{ fontFamily: 'AvenirNext, sans-serif', fontSize: '11px', letterSpacing: '0.35em', height: '42px' }}
+                style={{ fontFamily: 'AvenirNext, sans-serif', fontSize: '11px', letterSpacing: '0.35em', height: '40px', marginTop: '4px' }}
               >
                 {status === "submitting" ? "Submitting…" : "Keep Me Informed"}
               </button>
@@ -861,7 +869,7 @@ export default function HeroBrands() {
                 {/* CTA */}
                 <button
                   onClick={() => setModalOpen(true)}
-                  className="bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300"
+                  className="bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 cursor-pointer"
                   style={{ fontFamily: 'AvenirNext, sans-serif', fontSize: '11px', letterSpacing: '0.35em', paddingLeft: '44px', paddingRight: '44px', height: '42px', marginTop: '32px' }}
                 >
                   Join Us
@@ -950,7 +958,7 @@ export default function HeroBrands() {
                   {/* CTA */}
                   <button
                     onClick={() => setModalOpen(true)}
-                    className="bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300"
+                    className="bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 cursor-pointer"
                     style={{ fontFamily: 'AvenirNext, sans-serif', fontSize: '11px', letterSpacing: '0.35em', paddingLeft: '44px', paddingRight: '44px', height: '42px', marginTop: '32px' }}
                   >
                     Join Us

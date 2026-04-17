@@ -8,6 +8,15 @@
   --color-brand-white: #ffffff;
 }
 
+/* Fix select dropdown styling on dark backgrounds */
+select option {
+  background-color: #111 !important;
+  color: #fff !important;
+}
+select:focus {
+  background-color: transparent;
+}
+
 @theme inline {
   --font-sans: "AvenirNext", ui-sans-serif, system-ui, sans-serif;
   --color-brand-primary: var(--color-brand-primary);
