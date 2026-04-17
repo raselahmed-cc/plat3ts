@@ -577,12 +577,23 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
         </h2>
 
         {/* Divider */}
-        <div className="mx-auto w-16 h-px bg-white/30" style={{ marginBottom: '16px' }} />
+        {status !== "success" && (
+          <div className="mx-auto w-16 h-px bg-white/30" style={{ marginBottom: '16px' }} />
+        )}
 
         {status === "success" ? (
-          <div className="text-center py-10 animate-fadeIn">
-            <p className="text-white text-lg mb-3" style={{ fontFamily: 'AvenirNext, sans-serif' }}>Welcome to the road ahead.</p>
-            <p className="text-white/70 text-sm" style={{ fontFamily: 'AvenirNext, sans-serif' }}>We&apos;ll notify you the moment PLAT3S goes live.</p>
+          <div className="flex flex-col items-center text-center animate-fadeIn" style={{ padding: '40px 20px 48px' }}>
+            {/* Checkmark icon */}
+            <svg width="52" height="52" viewBox="0 0 52 52" fill="none" style={{ marginBottom: '28px' }}>
+              <circle cx="26" cy="26" r="25" stroke="rgba(255,255,255,0.25)" strokeWidth="1"/>
+              <path d="M16 26.5L23 33.5L36 20.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <h3 className="text-white text-xl tracking-[0.15em] uppercase" style={{ fontFamily: 'LandRoverWeb-Bold, sans-serif', marginBottom: '14px' }}>
+              Welcome to the road ahead
+            </h3>
+            <p className="text-white/50 text-[13px] leading-[1.8]" style={{ fontFamily: 'AvenirNext, sans-serif', maxWidth: '300px' }}>
+              You&apos;re on the list. We&apos;ll notify you the moment PLAT3S goes live.
+            </p>
           </div>
         ) : (
           <>
