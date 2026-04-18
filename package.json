@@ -1,5 +1,5 @@
 {
-  "name": "land-rover-clone",
+  "name": "plat3s",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
+  },
+  "engines": {
+    "node": ">=18.18.0"
   },
   "dependencies": {
     "next": "16.2.4",

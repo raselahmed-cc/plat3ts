@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.gitignore
+*.md
+deploy
+deploy-vps.sh
+ecosystem.config.js
+*.zip
+.env*

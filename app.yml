@@ -1,0 +1,8 @@
+name: plat3s
+script: server.js
+port: 3000
+env:
+  NODE_ENV: production
+  PORT: 3000
+  HOSTNAME: 0.0.0.0
+node_version: 20
