@@ -1,0 +1,3 @@
+plat3s.com, www.plat3s.com {
+    reverse_proxy app:3000
+}
