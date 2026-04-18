@@ -22,7 +22,7 @@ const brands: BrandPanel[] = [
     href: "#",
     image:
       "https://jlr.scene7.com/is/image/jlr/DX_INTRO_STILL_L460?qlt=85&wid=1920&fmt=webp",
-    video: "/Connect%20Bg%20Video.mov",
+    video: "/connect-bg.mp4",
     isYouTube: false,
     subtitle: "Build your Plat3s profile and bring your garage to life.",
     description:
@@ -35,7 +35,7 @@ const brands: BrandPanel[] = [
     href: "#",
     image:
       "https://jlr.scene7.com/is/image/jlr/DX_INTRO_STILL_L663?qlt=85&wid=1920&fmt=webp",
-    video: "/Save%20_Bg%20Video.mov",
+    video: "/save-bg.mp4",
     isYouTube: false,
     subtitle: "Save while you drive.",
     description:
@@ -48,7 +48,7 @@ const brands: BrandPanel[] = [
     href: "#",
     image:
       "https://jlr.scene7.com/is/image/jlr/DX_INTRO_STILL_L462?qlt=85&wid=1920&fmt=webp",
-    video: "/DiscoverBgVideo.mp4",
+    video: "/discover-bg.mp4",
     isYouTube: false,
     subtitle: "Discover what\u2019s next.",
     description:
@@ -88,10 +88,9 @@ function VideoBackground({
       muted
       loop
       playsInline
-      preload="auto"
+      preload="metadata"
     >
       <source src={brand.video} type="video/mp4" />
-      <source src={brand.video} type="video/quicktime" />
     </video>
   );
 }
