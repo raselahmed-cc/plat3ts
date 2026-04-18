@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Land Rover | Explore Luxury SUVs & 4x4 Vehicles",
+  title: "PLAT3S | CONNECT, SAVE & DISCOVER",
   description:
-    "Explore the world of Land Rover. Choose from Range Rover, Defender or Discovery to find the right luxury SUV for you.",
+    "Build your Plat3s profile, connect your vehicles, and bring every drive to life with synced music, shared moments, and a digital service book that transfers with your car when you sell.",
 };
 
 export default function RootLayout({
