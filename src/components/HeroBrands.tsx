@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, type FormEvent } from "react";
+import { useState, useEffect, useRef, useCallback, memo, useSyncExternalStore, type FormEvent } from "react";
 
 interface BrandPanel {
   id: string;
@@ -24,9 +24,9 @@ const brands: BrandPanel[] = [
       "https://jlr.scene7.com/is/image/jlr/DX_INTRO_STILL_L460?qlt=85&wid=1920&fmt=webp",
     video: "/connect-bg.mp4",
     isYouTube: false,
-    subtitle: "Build your Plat3s profile and bring your garage to life.",
+    subtitle: "Build your PLAT3S profile and bring your garage to life.",
     description:
-      "Build your Plat3s profile, connect your vehicles, and bring every drive to life with synced music, shared moments, and a digital service book that transfers with your car when you sell.",
+      "Build your PLAT3S profile, connect your vehicles, and bring every drive to life with a built-in smart dashcam capturing every moment, synced music, shared experiences, and a digital service book that transfers with your car when you sell and MORE.",
   },
   {
     id: "save",
@@ -52,19 +52,36 @@ const brands: BrandPanel[] = [
     isYouTube: false,
     subtitle: "Discover what\u2019s next.",
     description:
-      "Discover new roads, cars, events, and bring the map to life around you as you discover new businesses everywhere.",
+      "Discover new roads, cars, events, and bring the map to life around you as you discover another way to see the world.",
   },
 ];
 
-const AUTO_ROTATE_MS = 5000;
+const AUTO_ROTATE_MS = 8000;
 
-function VideoBackground({
+const noopSubscribe = () => () => {};
+
+const VideoBackground = memo(function VideoBackground({
   brand,
   shouldLoad,
+  playing = true,
 }: {
   brand: BrandPanel;
   shouldLoad: boolean;
+  playing?: boolean;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (playing) {
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+      v.currentTime = 0;
+    }
+  }, [playing]);
+
   if (!shouldLoad) return null;
 
   if (brand.isYouTube) {
@@ -83,8 +100,9 @@ function VideoBackground({
 
   return (
     <video
+      ref={videoRef}
       className="absolute inset-0 w-full h-full object-cover"
-      autoPlay
+      autoPlay={playing}
       muted
       loop
       playsInline
@@ -93,11 +111,14 @@ function VideoBackground({
       <source src={brand.video} type="video/mp4" />
     </video>
   );
-}
+});
 
 /* ─── HubSpot Configuration ─── */
-const HUBSPOT_PORTAL_ID = "45247805";   // brightDigital
-const HUBSPOT_FORM_GUID = "e7396cce-336d-4ea2-b117-293745bd7761";
+const HUBSPOT_PORTAL_ID = "244369665";   // PLAT3S
+const HUBSPOT_FORM_GUID = "aba7d9e5-0f27-48dc-91f0-fcd08e9808aa";
+
+/* ─── n8n Auto-Responder Webhook ─── */
+const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL || "";
 
 interface JoinFormData {
   firstName: string;
@@ -113,17 +134,66 @@ interface JoinFormData {
 interface FormErrors {
   phone?: string;
   email?: string;
+  plate?: string;
 }
 
+/* ─── Plate validation ─── */
+function validatePlate(plate: string, country: string): string | undefined {
+  if (!plate.trim()) return undefined; // optional field
+  const val = plate.trim().toUpperCase();
+  if (country === "US") {
+    // US plates: 2–8 alphanumeric characters, spaces and hyphens allowed as separators
+    if (!/^[A-Z0-9][A-Z0-9 \-]{0,6}[A-Z0-9]$/.test(val) && !/^[A-Z0-9]{1,2}$/.test(val))
+      return "Enter a valid US plate (e.g. ABC-1234)";
+    const alphanum = val.replace(/[^A-Z0-9]/g, "");
+    if (alphanum.length < 2 || alphanum.length > 8)
+      return "US plates are 2–8 characters";
+  } else if (country === "CA") {
+    if (!/^[A-Z0-9 \-]{2,8}$/i.test(val)) return "Enter a valid plate number";
+  } else if (country === "GB") {
+    // UK plates: AB12 ABC or AB12ABC
+    if (!/^[A-Z]{2}[0-9]{2}\s?[A-Z]{3}$/i.test(val)) return "Enter a valid UK plate (e.g. AB12 CDE)";
+  } else {
+    // Generic: 2–10 alphanumeric + hyphens/spaces
+    if (!/^[A-Z0-9][A-Z0-9 \-]{0,8}[A-Z0-9]$/i.test(val) && val.length > 1)
+      return "Enter a valid plate number";
+    if (val.replace(/[^A-Z0-9]/gi, "").length > 10) return "Plate number is too long";
+  }
+  return undefined;
+}
+
+/* ─── Phone digit limits per country (local number, no dial code) ─── */
+const PHONE_LIMITS: Record<string, { min: number; max: number }> = {
+  US: { min: 10, max: 10 },
+  CA: { min: 10, max: 10 },
+  GB: { min: 10, max: 11 },
+  AU: { min: 9,  max: 10 },
+  DE: { min: 3,  max: 11 },
+  FR: { min: 9,  max: 10 },
+  AE: { min: 7,  max: 9  },
+  JP: { min: 10, max: 11 },
+  MX: { min: 10, max: 10 },
+  BR: { min: 10, max: 11 },
+  IT: { min: 6,  max: 11 },
+  ES: { min: 9,  max: 9  },
+  NL: { min: 9,  max: 10 },
+  SE: { min: 7,  max: 13 },
+  CH: { min: 9,  max: 10 },
+  NZ: { min: 8,  max: 10 },
+  SA: { min: 9,  max: 9  },
+  SG: { min: 8,  max: 8  },
+  KR: { min: 9,  max: 11 },
+  ZA: { min: 9,  max: 10 },
+};
+const DEFAULT_PHONE_LIMITS = { min: 7, max: 15 };
+
 /* ─── Validation ─── */
-function validatePhone(phone: string): string | undefined {
+function validatePhone(phone: string, country = "US"): string | undefined {
   if (!phone.trim()) return "Phone number is required";
-  // Strip non-digits for validation
   const digits = phone.replace(/\D/g, "");
-  if (digits.length < 7) return "Phone number is too short";
-  if (digits.length > 15) return "Phone number is too long";
-  // Basic international format check
-  if (!/^[\d\s\-+().]+$/.test(phone)) return "Invalid characters in phone number";
+  const { min, max } = PHONE_LIMITS[country] ?? DEFAULT_PHONE_LIMITS;
+  if (digits.length < min) return `Enter a valid ${min}-digit phone number`;
+  if (digits.length > max) return `Phone number must be ${max === min ? `${max}` : `${min}–${max}`} digits`;
   return undefined;
 }
 
@@ -135,19 +205,30 @@ function validateEmail(email: string): string | undefined {
 }
 
 function formatPhoneInput(value: string, country: string): string {
-  const digits = value.replace(/\D/g, "");
-  // US/CA formatting: (XXX) XXX-XXXX
-  if ((country === "US" || country === "CA") && digits.length <= 10) {
+  const allDigits = value.replace(/\D/g, "");
+  const { max } = PHONE_LIMITS[country] ?? DEFAULT_PHONE_LIMITS;
+  const digits = allDigits.slice(0, max); // clamp — never allow more than max digits
+  // US/CA: (XXX) XXX-XXXX
+  if (country === "US" || country === "CA") {
     if (digits.length <= 3) return digits;
     if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   }
-  // UK formatting: XXXXX XXXXXX
-  if (country === "GB" && digits.length <= 11) {
+  // UK: XXXXX XXXXXX
+  if (country === "GB") {
     if (digits.length <= 5) return digits;
     return `${digits.slice(0, 5)} ${digits.slice(5)}`;
   }
-  return value;
+  // AU: XXXX XXX XXX
+  if (country === "AU") {
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`;
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  }
+  // SG/SA/AE: plain digits (short numbers)
+  if (country === "SG" || country === "SA" || country === "AE") return digits;
+  // Default: plain digits
+  return digits;
 }
 
 /* ─── Country & Region Data ─── */
@@ -288,7 +369,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     plateNumber: "",
     country: "US",
     region: "",
-    optIn: false,
+    optIn: true,
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -322,30 +403,52 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     if (field === "phone" || field === "email") {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
+    if (field === "plateNumber") {
+      const next = { ...form, plateNumber: value as string };
+      setErrors((prev) => ({ ...prev, plate: validatePlate(value as string, form.country) }));
+      void next;
+    }
   };
 
-  const handleBlur = (field: "phone" | "email") => {
+  const handleBlur = (field: "phone" | "email" | "plate") => {
     setTouched((prev) => ({ ...prev, [field]: true }));
-    if (field === "phone") setErrors((prev) => ({ ...prev, phone: validatePhone(form.phone) }));
+    if (field === "phone") setErrors((prev) => ({ ...prev, phone: validatePhone(form.phone, form.country) }));
     if (field === "email") setErrors((prev) => ({ ...prev, email: validateEmail(form.email) }));
+    if (field === "plate") setErrors((prev) => ({ ...prev, plate: validatePlate(form.plateNumber, form.country) }));
   };
 
   const handlePhoneChange = (value: string) => {
     const formatted = formatPhoneInput(value, form.country);
     setForm((prev) => ({ ...prev, phone: formatted }));
-    if (touched.phone) setErrors((prev) => ({ ...prev, phone: validatePhone(formatted) }));
+    if (touched.phone) setErrors((prev) => ({ ...prev, phone: validatePhone(formatted, form.country) }));
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const phoneErr = validatePhone(form.phone);
+    const phoneErr = validatePhone(form.phone, form.country);
     const emailErr = validateEmail(form.email);
-    setErrors({ phone: phoneErr, email: emailErr });
-    setTouched({ phone: true, email: true });
-    if (phoneErr || emailErr) return;
+    const plateErr = validatePlate(form.plateNumber, form.country);
+    setErrors({ phone: phoneErr, email: emailErr, plate: plateErr });
+    setTouched({ phone: true, email: true, plate: true });
+    if (phoneErr || emailErr || plateErr) return;
     setStatus("submitting");
     try {
       await submitToHubSpot(form);
+      // Fire n8n auto-responder webhook (non-blocking)
+      if (N8N_WEBHOOK_URL) {
+        fetch(N8N_WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: form.firstName,
+            lastName: form.lastName,
+            email: form.email,
+            phone: form.phone,
+            country: form.country,
+            region: form.region,
+          }),
+        }).catch(() => {}); // silent — auto-reply is best-effort
+      }
       setStatus("success");
     } catch {
       // Log for debugging — fall back to console capture
@@ -368,7 +471,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn"
     >
       <div
-        className="relative w-[92vw] max-w-lg overflow-y-auto"
+        className="join-modal relative w-[92vw] max-w-lg overflow-y-auto"
         style={{ animation: "fadeIn 0.3s ease-out", backgroundColor: '#000', padding: '32px 32px', maxHeight: '90vh' }}
       >
         {/* Close button */}
@@ -376,7 +479,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
           onClick={onClose}
           className="absolute top-5 right-6 text-white/60 hover:text-white text-xl leading-none transition-colors cursor-pointer"
           aria-label="Close"
-          style={{ fontFamily: 'AvenirNext, sans-serif', zIndex: 10 }}
+          style={{ fontFamily: 'Plat3sBody, sans-serif', zIndex: 10 }}
         >
           &#x2715;
         </button>
@@ -387,7 +490,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             <button
               onClick={() => setShowPolicy(false)}
               className="flex items-center gap-2 text-white/60 hover:text-white text-sm transition-colors"
-              style={{ fontFamily: 'AvenirNext, sans-serif', marginBottom: '24px' }}
+              style={{ fontFamily: 'Plat3sBody, sans-serif', marginBottom: '24px' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               Back to form
@@ -395,23 +498,23 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 
             <h2
               className="text-white text-2xl tracking-[0.3em] uppercase text-center"
-              style={{ fontFamily: "LandRoverWeb-Bold, sans-serif", marginBottom: '8px' }}
+              style={{ fontFamily: "Plat3sHeading, sans-serif", marginBottom: '8px' }}
             >
               PLAT3S
             </h2>
             <div className="mx-auto w-16 h-px bg-white/30" style={{ marginBottom: '24px' }} />
 
             <div
-              className="overflow-y-auto text-white/80 text-[13px] leading-[1.9] pr-2"
-              style={{ fontFamily: 'AvenirNext, sans-serif', maxHeight: '60vh', textAlign: 'justify' }}
+              className="overflow-y-auto text-white/80 text-[13px] leading-[1.9] pr-4"
+              style={{ fontFamily: 'Plat3sBody, sans-serif', maxHeight: '60vh', textAlign: 'justify', wordBreak: 'break-word', overflowWrap: 'break-word' }}
             >
-              <h3 className="text-white text-base uppercase tracking-wide" style={{ marginBottom: '16px' }}>Privacy Policy for Plat3s.com</h3>
+              <h3 className="text-white text-base uppercase tracking-wide" style={{ marginBottom: '16px' }}>Privacy Policy for PLAT3S.com</h3>
               <p style={{ marginBottom: '12px' }} className="text-white/50 text-xs">Effective Date: April 17, 2026</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>1. Introduction</h4>
-              <p style={{ marginBottom: '12px' }}>Welcome to Plat3s.com (&ldquo;Plat3s,&rdquo; &ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;). Plat3s is a social platform centered on automotive experiences, enabling users to create digital garages, capture and share driving content, participate in events, and access marketplace and service features.</p>
+              <p style={{ marginBottom: '12px' }}>Welcome to PLAT3S.com (&ldquo;PLAT3S,&rdquo; &ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;). PLAT3S is a social platform centered on automotive experiences, enabling users to create digital garages, capture and share driving content, participate in events, and access marketplace and service features.</p>
               <p style={{ marginBottom: '12px' }}>This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our website, mobile applications, connected services, and any related features (collectively, the &ldquo;Services&rdquo;).</p>
-              <p style={{ marginBottom: '12px' }}>By accessing or using Plat3s, you agree to the terms of this Privacy Policy.</p>
+              <p style={{ marginBottom: '12px' }}>By accessing or using PLAT3S, you agree to the terms of this Privacy Policy.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>2. Information We Collect</h4>
               <p style={{ marginBottom: '12px' }}>We collect information in several ways, including information you provide directly, information collected automatically, and information from third parties.</p>
@@ -510,7 +613,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               </ul>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>7. Location &amp; Driving Data</h4>
-              <p style={{ marginBottom: '12px' }}>Plat3s may collect precise location and driving behavior data to power features such as drive capture and route visualization, nearby deals and recommendations, and event discovery. You may control location permissions via your device settings. Disabling location may limit functionality.</p>
+              <p style={{ marginBottom: '12px' }}>PLAT3S may collect precise location and driving behavior data to power features such as drive capture and route visualization, nearby deals and recommendations, and event discovery. You may control location permissions via your device settings. Disabling location may limit functionality.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>8. Cookies and Tracking Technologies</h4>
               <p style={{ marginBottom: '12px' }}>We use cookies and similar technologies to maintain sessions, analyze usage, personalize content, and deliver advertising. You can manage cookie preferences through your browser settings.</p>
@@ -519,10 +622,10 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               <p style={{ marginBottom: '12px' }}>We implement industry-standard security measures including encryption in transit and at rest, access controls and authentication, and monitoring and threat detection. However, no system is completely secure.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>10. Third-Party Services</h4>
-              <p style={{ marginBottom: '12px' }}>Plat3s may link to or integrate with third-party services. We are not responsible for their privacy practices.</p>
+              <p style={{ marginBottom: '12px' }}>PLAT3S may link to or integrate with third-party services. We are not responsible for their privacy practices.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>11. Children&apos;s Privacy</h4>
-              <p style={{ marginBottom: '12px' }}>Plat3s is not intended for users under 13 (or applicable minimum age). We do not knowingly collect data from children.</p>
+              <p style={{ marginBottom: '12px' }}>PLAT3S is not intended for users under 13 (or applicable minimum age). We do not knowingly collect data from children.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>12. International Data Transfers</h4>
               <p style={{ marginBottom: '12px' }}>Your information may be transferred and processed outside your country, including the United States.</p>
@@ -531,15 +634,15 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               <p style={{ marginBottom: '12px' }}>We may update this Privacy Policy periodically. Changes will be posted with an updated effective date.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>14. Contact Us</h4>
-              <p style={{ marginBottom: '12px' }}>If you have questions or requests regarding this Privacy Policy, contact us at Plat3s.</p>
+              <p style={{ marginBottom: '12px' }}>If you have questions or requests regarding this Privacy Policy, contact us at PLAT3S.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>15. Additional Platform-Specific Disclosures</h4>
               <p className="text-white text-[12px] font-semibold" style={{ marginBottom: '6px' }}>15.1 License Plate Data</p>
-              <p style={{ marginBottom: '12px' }}>Plat3s collects and displays license plate-related content as part of its core social functionality. Users are responsible for content they upload and must comply with applicable laws.</p>
+              <p style={{ marginBottom: '12px' }}>PLAT3S collects and displays license plate-related content as part of its core social functionality. Users are responsible for content they upload and must comply with applicable laws.</p>
               <p className="text-white text-[12px] font-semibold" style={{ marginBottom: '6px' }}>15.2 Marketplace &amp; Transactions</p>
-              <p style={{ marginBottom: '12px' }}>Transactions are processed through third-party providers. Plat3s does not store full payment details.</p>
+              <p style={{ marginBottom: '12px' }}>Transactions are processed through third-party providers. PLAT3S does not store full payment details.</p>
               <p className="text-white text-[12px] font-semibold" style={{ marginBottom: '6px' }}>15.3 Dashcam &amp; Media Integration</p>
-              <p style={{ marginBottom: '12px' }}>If enabled, Plat3s may ingest media from connected devices. Users control permissions and uploads.</p>
+              <p style={{ marginBottom: '12px' }}>If enabled, PLAT3S may ingest media from connected devices. Users control permissions and uploads.</p>
               <p className="text-white text-[12px] font-semibold" style={{ marginBottom: '6px' }}>15.4 Vehicle Records</p>
               <p style={{ marginBottom: '12px' }}>Users may store service records and vehicle history data. This data is private unless explicitly shared.</p>
 
@@ -550,7 +653,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               <p style={{ marginBottom: '12px' }}>We limit data collection to what is necessary for platform functionality and clearly defined purposes.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>18. Automated Decision-Making</h4>
-              <p style={{ marginBottom: '12px' }}>Plat3s may use automated systems for recommendations, fraud detection, and personalization. These do not produce legally significant effects.</p>
+              <p style={{ marginBottom: '12px' }}>PLAT3S may use automated systems for recommendations, fraud detection, and personalization. These do not produce legally significant effects.</p>
 
               <h4 className="text-white text-sm font-semibold" style={{ marginTop: '20px', marginBottom: '8px' }}>19. User Controls &amp; Settings</h4>
               <p style={{ marginBottom: '8px' }}>Users can manage:</p>
@@ -570,7 +673,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
         {/* Logo */}
         <h2
           className="text-white text-2xl tracking-[0.3em] uppercase text-center mb-2"
-          style={{ fontFamily: "LandRoverWeb-Bold, sans-serif" }}
+          style={{ fontFamily: "Plat3sHeading, sans-serif" }}
         >
           PLAT3S
         </h2>
@@ -587,24 +690,24 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               <circle cx="26" cy="26" r="25" stroke="rgba(255,255,255,0.25)" strokeWidth="1"/>
               <path d="M16 26.5L23 33.5L36 20.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <h3 className="text-white text-xl tracking-[0.15em] uppercase" style={{ fontFamily: 'LandRoverWeb-Bold, sans-serif', marginBottom: '14px' }}>
+            <h3 className="text-white text-xl tracking-[0.15em] uppercase" style={{ fontFamily: 'Plat3sHeading, sans-serif', marginBottom: '14px' }}>
               Welcome to the road ahead
             </h3>
-            <p className="text-white/50 text-[13px] leading-[1.8]" style={{ fontFamily: 'AvenirNext, sans-serif', maxWidth: '300px' }}>
+            <p className="text-white/50 text-[13px] leading-[1.8]" style={{ fontFamily: 'Plat3sBody, sans-serif', maxWidth: '300px' }}>
               You&apos;re on the list. We&apos;ll notify you the moment PLAT3S goes live.
             </p>
           </div>
         ) : (
           <>
             {/* Copy */}
-            <p className="text-white/90 text-sm leading-[1.7]" style={{ fontFamily: 'AvenirNext, sans-serif', textAlign: 'justify', marginBottom: '20px', padding: '0 4px' }}>
+            <p className="modal-intro text-white/90 text-sm leading-[1.7]" style={{ fontFamily: 'Plat3sBody, sans-serif', textAlign: 'justify', marginBottom: '20px', padding: '0 4px' }}>
               More than a dashcam. Connect your car, save, and discover.
               Enjoy exclusive driver offers, deals while you&apos;re on
               the road, PLAT3S.com member-only events &amp;&nbsp;more.
               Join&nbsp;us.
             </p>
 
-            <form onSubmit={handleSubmit} className="flex flex-col" style={{ fontFamily: 'AvenirNext, sans-serif', gap: '14px' }}>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-[14px]" style={{ fontFamily: 'Plat3sBody, sans-serif' }}>
               {/* First Name & Last Name */}
               <div className="flex gap-4">
                 <div className="relative flex-1">
@@ -702,14 +805,20 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 
               {/* Plate Number */}
               <div className="relative">
-                <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>Plate Number</label>
+                <label className="block text-white/50 text-[10px] tracking-[0.15em] uppercase" style={{ paddingLeft: '2px', marginBottom: '4px' }}>Primary Plate Number (optional)</label>
                 <input
                   type="text"
                   value={form.plateNumber}
-                  onChange={(e) => update("plateNumber", e.target.value)}
+                  onChange={(e) => update("plateNumber", e.target.value.toUpperCase())}
+                  onBlur={() => handleBlur("plate")}
+                  maxLength={10}
+                  placeholder={form.country === "US" ? "e.g. ABC-1234" : form.country === "GB" ? "e.g. AB12 CDE" : ""}
                   className="w-full bg-transparent border-0 border-b border-white/25 text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-white/60 transition-colors"
-                  style={{ paddingLeft: '2px', paddingBottom: '6px' }}
+                  style={{ paddingLeft: '2px', paddingBottom: '6px', ...(touched.plate && errors.plate ? { borderColor: 'rgba(248,113,113,0.5)' } : {}) }}
                 />
+                {touched.plate && errors.plate && (
+                  <p className="text-red-400/70 text-[10px]" style={{ marginTop: '4px', paddingLeft: '2px' }}>{errors.plate}</p>
+                )}
               </div>
 
               {/* Required note */}
@@ -730,7 +839,7 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
                     )}
                   </div>
                 </div>
-                <span className="text-white/50 text-[11px] leading-[1.6] group-hover:text-white/70 transition-colors" style={{ textAlign: 'justify' }}>
+                <span className="consent-text text-white/50 text-[11px] leading-[1.6] group-hover:text-white/70 transition-colors" style={{ textAlign: 'justify' }}>
                   I consent to PLAT3S contacting me by text message and email
                   regarding product updates and launch notifications, subject to
                   its{' '}
@@ -749,8 +858,8 @@ function JoinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
               <button
                 type="submit"
                 disabled={status === "submitting"}
-                className="w-full bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 disabled:opacity-40"
-                style={{ fontFamily: 'AvenirNext, sans-serif', fontSize: '11px', letterSpacing: '0.35em', height: '40px', marginTop: '4px' }}
+                className="submit-btn w-full bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 disabled:opacity-40"
+                style={{ fontFamily: 'Plat3sBody, sans-serif', fontSize: '11px', letterSpacing: '0.35em', height: '40px', marginTop: '4px' }}
               >
                 {status === "submitting" ? "Submitting…" : "Keep Me Informed"}
               </button>
@@ -768,24 +877,33 @@ export default function HeroBrands() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [direction, setDirection] = useState<"next" | "prev">("next");
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
+  const [isTouching, setIsTouching] = useState(false);
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartY = useRef(0);
+  const touchMoved = useRef(false);
+  const touchStartTime = useRef(0);
 
-  useEffect(() => setMounted(true), []);
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    };
+  }, []);
 
   const goTo = useCallback(
     (index: number, dir: "next" | "prev") => {
-      if (isAnimating) return;
+      if (index === activeIndex) return;
       setDirection(dir);
-      setIsAnimating(true);
       setActiveIndex(index);
-      setTimeout(() => setIsAnimating(false), 700);
     },
-    [isAnimating]
+    [activeIndex]
   );
 
   const goNext = useCallback(() => {
@@ -797,57 +915,131 @@ export default function HeroBrands() {
   }, [activeIndex, goTo]);
 
   useEffect(() => {
-    if (modalOpen) return; // pause auto-rotate when modal is open
+    if (modalOpen || isTouching) return; // pause auto-rotate when modal is open or finger is down
     timerRef.current = setTimeout(goNext, AUTO_ROTATE_MS);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [activeIndex, goNext, modalOpen]);
+  }, [activeIndex, goNext, modalOpen, isTouching]);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
+  // --- Native touch handlers (passive: false required for iOS preventDefault) ---
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const goNextRef = useRef(goNext);
+  const goPrevRef = useRef(goPrev);
+  const modalOpenRef = useRef(modalOpen);
+  useEffect(() => {
+    goNextRef.current = goNext;
+    goPrevRef.current = goPrev;
+    modalOpenRef.current = modalOpen;
+  });
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.touches[0].clientX;
-  };
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
 
-  const handleTouchEnd = () => {
-    const delta = touchStartX.current - touchEndX.current;
-    if (Math.abs(delta) > 50) {
-      if (delta > 0) goNext();
-      else goPrev();
-    }
-  };
+    const onTouchStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('input') && !target.closest('textarea') && !target.closest('select') && !target.closest('button') && !target.closest('a')) {
+        e.preventDefault();
+      }
+      setIsTouching(true);
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+      touchEndX.current = e.touches[0].clientX;
+      touchMoved.current = false;
+      touchStartTime.current = Date.now();
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = setTimeout(() => setIsHolding(true), 600);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      touchEndX.current = e.touches[0].clientX;
+      const dx = Math.abs(e.touches[0].clientX - touchStartX.current);
+      const dy = Math.abs(e.touches[0].clientY - touchStartY.current);
+      if (dx > 10 || dy > 10) {
+        touchMoved.current = true;
+        if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+        setIsHolding(false);
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      setIsHolding(false);
+      setIsTouching(false);
+      if (!modalOpenRef.current) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => goNextRef.current(), AUTO_ROTATE_MS);
+      }
+
+      const delta = touchStartX.current - touchEndX.current;
+      if (Math.abs(delta) > 50) {
+        if (delta > 0) goNextRef.current();
+        else goPrevRef.current();
+        return;
+      }
+
+      const elapsed = Date.now() - touchStartTime.current;
+      if (!touchMoved.current && elapsed < 300) {
+        const target = e.target as HTMLElement;
+        if (target.closest('button') || target.closest('a')) return;
+        const screenW = window.innerWidth;
+        const x = touchStartX.current;
+        if (x < screenW / 2) goPrevRef.current();
+        else goNextRef.current();
+      }
+    };
+
+    const onTouchCancel = () => {
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      setIsHolding(false);
+      setIsTouching(false);
+      if (!modalOpenRef.current) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => goNextRef.current(), AUTO_ROTATE_MS);
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', onTouchCancel, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchCancel);
+    };
+  }, []);
 
   return (
     <section className="relative w-full min-h-screen">
-      {/* ===== MOBILE CAROUSEL (< lg) ===== */}
+      {/* ===== MOBILE/TABLET CAROUSEL (<= 1366px) ===== */}
       <div
-        className="lg:hidden relative w-full h-screen overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        ref={carouselRef}
+        className="min-[1367px]:hidden relative w-full h-screen overflow-hidden select-none"
+        style={{
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          touchAction: 'none',
+        }}
       >
         {brands.map((brand, i) => {
           const isCurrent = i === activeIndex;
 
-          let transformClass = "";
-          if (isCurrent && mounted) {
-            transformClass =
-              direction === "next"
-                ? "animate-slideInRight"
-                : "animate-slideInLeft";
-          }
-
           return (
             <div
               key={brand.id}
-              className={`absolute inset-0 flex items-center justify-center transition-opacity duration-700 ${
-                isCurrent
-                  ? `opacity-100 z-10 ${transformClass}`
-                  : "opacity-0 z-0"
-              }`}
+              className="absolute inset-0 flex items-center justify-center"
+              style={{
+                opacity: (isCurrent && mounted) ? 1 : 0,
+                transition: isCurrent ? 'opacity 0.65s ease-in-out' : 'opacity 0.65s ease-in-out',
+                zIndex: isCurrent ? 10 : 1,
+                pointerEvents: isCurrent ? 'auto' : 'none',
+                willChange: 'opacity',
+              }}
             >
               <div
                 className="absolute inset-0 bg-cover bg-center"
@@ -856,31 +1048,36 @@ export default function HeroBrands() {
               <VideoBackground
                 brand={brand}
                 shouldLoad={mounted && (isCurrent || Math.abs(i - activeIndex) <= 1)}
+                playing={true}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/40" />
 
               {/* Content */}
-              <div className="relative z-10 flex flex-col items-center text-center px-8 max-w-lg">
+              <div className="carousel-content relative z-10 flex flex-col items-center text-center" style={{ width: '100%', maxWidth: '480px', padding: '0 24px' }}>
                 <h2
-                  className="text-white text-5xl tracking-[0.35em] uppercase"
-                  style={{ fontFamily: "LandRoverWeb-Bold, sans-serif" }}
+                  className="carousel-title text-white uppercase"
+                  style={{ fontFamily: "Plat3sHeading, sans-serif", fontSize: '42px', letterSpacing: '0.3em', marginRight: '-0.3em' }}
                 >
                   {brand.logoText}
                 </h2>
+                {/* Underline bar */}
                 <span
-                  className={`block h-px bg-white/60 transition-all duration-700 ease-out mt-6 ${
+                  className={`carousel-bar block h-px bg-white/60 transition-all duration-700 ease-out mt-5 ${
                     isCurrent ? "w-16 opacity-100" : "w-0 opacity-0"
                   }`}
                 />
                 {/* Subtext */}
-                <p className="text-white text-base leading-7" style={{ marginTop: '36px' }}>
+                <p
+                  className="carousel-desc text-white text-justify"
+                  style={{ fontSize: '15px', lineHeight: '1.8', marginTop: '28px', padding: '0 8px', maxWidth: '400px' }}
+                >
                   {brand.description}
                 </p>
                 {/* CTA */}
                 <button
                   onClick={() => setModalOpen(true)}
-                  className="bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 cursor-pointer"
-                  style={{ fontFamily: 'AvenirNext, sans-serif', fontSize: '11px', letterSpacing: '0.35em', paddingLeft: '44px', paddingRight: '44px', height: '42px', marginTop: '32px' }}
+                  className="carousel-cta bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 cursor-pointer"
+                  style={{ fontFamily: 'Plat3sBody, sans-serif', fontSize: '11px', letterSpacing: '0.35em', paddingLeft: '44px', paddingRight: '44px', height: '42px', marginTop: '32px' }}
                 >
                   Join Us
                 </button>
@@ -890,46 +1087,55 @@ export default function HeroBrands() {
         })}
 
         {/* Dot indicators */}
-        <div className="absolute bottom-10 left-0 right-0 z-20 flex justify-center gap-3">
-          {brands.map((_, i) => (
-            <button
-              key={i}
-              aria-label={`Go to slide ${i + 1}`}
-              onClick={() => goTo(i, i > activeIndex ? "next" : "prev")}
-              className={`h-[2px] rounded-full transition-all duration-500 ${
-                i === activeIndex
-                  ? "w-8 bg-white"
-                  : "w-4 bg-white/30 hover:bg-white/50"
-              }`}
-            />
-          ))}
+        <div className="absolute bottom-10 left-0 right-0 z-20 flex flex-col items-center gap-2 md:gap-3">
+          <p
+            className="carousel-tap text-white/80 uppercase text-[10px] tracking-[0.2em]"
+            style={{ fontFamily: "Plat3sBody, sans-serif" }}
+          >
+            tap or swipe
+          </p>
+          <div className="flex justify-center gap-3">
+            {brands.map((_, i) => (
+              <button
+                key={i}
+                aria-label={`Go to slide ${i + 1}`}
+                onClick={() => goTo(i, i > activeIndex ? "next" : "prev")}
+                className={`h-[2px] rounded-full transition-all duration-500 ${
+                  i === activeIndex
+                    ? "w-8 bg-white"
+                    : "w-4 bg-white/30 hover:bg-white/50"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* ===== DESKTOP COLUMNS (lg+) ===== */}
-      <div className="hidden lg:flex w-full min-h-screen">
+      {/* ===== DESKTOP COLUMNS (>= 1367px) ===== */}
+      <div className="hidden min-[1367px]:flex w-full min-h-screen">
         {brands.map((brand) => {
           const isHovered = hoveredId === brand.id;
           const isOtherHovered = hoveredId !== null && hoveredId !== brand.id;
+          const isSave = brand.id === "save";
 
           return (
             <div
               key={brand.id}
               className={`relative flex-1 flex flex-col items-center justify-center overflow-hidden transition-all duration-700 ease-in-out min-h-screen cursor-pointer ${
                 isHovered
-                  ? "flex-[1.5]"
+                  ? isSave ? "flex-[2]" : "flex-1"
                   : isOtherHovered
-                  ? "flex-[0.75]"
+                  ? "flex-[0.85]"
                   : "flex-1"
               }`}
               onMouseEnter={() => setHoveredId(brand.id)}
               onMouseLeave={() => setHoveredId(null)}
             >
               <div
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700"
+                className="absolute inset-0 bg-cover bg-center"
                 style={{ backgroundImage: `url(${brand.image})` }}
               />
-              <VideoBackground brand={brand} shouldLoad={mounted} />
+              <VideoBackground brand={brand} shouldLoad={mounted} playing={isHovered} />
 
               {/* Gradient overlay — darker on hover for readability */}
               <div
@@ -941,10 +1147,10 @@ export default function HeroBrands() {
               />
 
               {/* Content */}
-              <div className="relative z-10 flex flex-col items-center justify-center text-center" style={{ padding: '0 40px', maxWidth: '520px' }}>
+              <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 xl:px-10" style={{ width: '480px', maxWidth: '100%' }}>
                 <h2
-                  className="text-white uppercase"
-                  style={{ fontFamily: "LandRoverWeb-Bold, sans-serif", fontSize: '48px', letterSpacing: '0.3em' }}
+                  className="text-white uppercase text-3xl lg:text-4xl xl:text-[48px]"
+                  style={{ fontFamily: "Plat3sHeading, sans-serif", letterSpacing: '0.3em' }}
                 >
                   {brand.logoText}
                 </h2>
@@ -962,14 +1168,14 @@ export default function HeroBrands() {
                     transition: 'all 0.5s ease-out',
                   }}
                 >
-                  <p className="text-white" style={{ fontSize: '18px', lineHeight: '1.8' }}>
+                  <p className="text-white text-base lg:text-lg text-justify" style={{ lineHeight: '1.8', maxWidth: '400px', paddingLeft: '16px', paddingRight: '16px' }}>
                     {brand.description}
                   </p>
                   {/* CTA */}
                   <button
                     onClick={() => setModalOpen(true)}
                     className="bg-white text-[#1a1a1a] uppercase font-semibold hover:bg-[#1a1a1a] hover:text-white transition-all duration-300 cursor-pointer"
-                    style={{ fontFamily: 'AvenirNext, sans-serif', fontSize: '11px', letterSpacing: '0.35em', paddingLeft: '44px', paddingRight: '44px', height: '42px', marginTop: '32px' }}
+                    style={{ fontFamily: 'Plat3sBody, sans-serif', fontSize: '11px', letterSpacing: '0.35em', paddingLeft: '44px', paddingRight: '44px', height: '42px', marginTop: '32px' }}
                   >
                     Join Us
                   </button>

@@ -275,7 +275,7 @@ export default function Footer() {
             {/* Land Rover Logo */}
             <div
               className="text-lg tracking-[0.3em] uppercase text-white/60"
-              style={{ fontFamily: "LandRoverWeb-Bold, sans-serif" }}
+              style={{ fontFamily: "Plat3sHeading, sans-serif" }}
             >
               LAND ROVER
             </div>

@@ -18,50 +18,17 @@ select:focus {
 }
 
 @theme inline {
-  --font-sans: "AvenirNext", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
   --color-brand-primary: var(--color-brand-primary);
   --color-brand-dark-grey: var(--color-brand-dark-grey);
   --color-brand-medium-grey: var(--color-brand-medium-grey);
   --color-brand-light-grey: var(--color-brand-light-grey);
 }
 
-@font-face {
-  font-family: "LandRoverWeb-Bold";
-  src: url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/Landrover/LandRoverWeb-Bold.woff2") format("woff2"),
-    url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/Landrover/LandRoverWeb-Bold.woff") format("woff");
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "AvenirNext";
-  src: url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/AvenirNextW1G/AvenirNextW1G-Regular.woff2") format("woff2"),
-    url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/AvenirNextW1G/AvenirNextW1G-Regular.woff") format("woff");
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "AvenirNext";
-  font-weight: 500;
-  src: url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/AvenirNextW1G/AvenirNextW1G-Medium.woff2") format("woff2"),
-    url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/AvenirNextW1G/AvenirNextW1G-Medium.woff") format("woff");
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "AvenirNext";
-  font-weight: 600;
-  src: url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/AvenirNextW1G/AvenirNextW1G-Demi.woff2") format("woff2"),
-    url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/AvenirNextW1G/AvenirNextW1G-Demi.woff") format("woff");
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "AvenirNext";
-  font-weight: 700;
-  src: url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/AvenirNextW1G/AvenirNextW1G-Bold.woff2") format("woff2"),
-    url("https://modules.jaguarlandrover.com/modules/jlr-fonts/latest/AvenirNextW1G/AvenirNextW1G-Bold.woff") format("woff");
-  font-display: swap;
-}
+/* ─── Fonts loaded via <link> in layout.tsx (Montserrat + Nunito Sans) ─── */
+/* Shim: map Plat3sHeading / Plat3sBody inline-style references to loaded font families */
+[style*="Plat3sHeading"] { font-family: "Montserrat", sans-serif !important; }
+[style*="Plat3sBody"]    { font-family: "Nunito Sans", sans-serif !important; }
 
 * {
   margin: 0;
@@ -76,15 +43,15 @@ html {
 body {
   background: var(--color-brand-primary);
   color: var(--color-brand-white);
-  font-family: "AvenirNext", sans-serif;
+  font-family: "Nunito Sans", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Mobile carousel animations */
+/* Carousel slide content entrance animations */
 @keyframes slideInRight {
   from {
-    transform: translateX(8%);
+    transform: translateX(12px);
     opacity: 0;
   }
   to {
@@ -95,7 +62,7 @@ body {
 
 @keyframes slideInLeft {
   from {
-    transform: translateX(-8%);
+    transform: translateX(-12px);
     opacity: 0;
   }
   to {
@@ -105,11 +72,11 @@ body {
 }
 
 .animate-slideInRight {
-  animation: slideInRight 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: slideInRight 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-slideInLeft {
-  animation: slideInLeft 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: slideInLeft 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes fadeIn {
@@ -119,4 +86,83 @@ body {
 
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-out both;
+}
+
+/* Thin scrollbar for modal content */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* ─── Join Modal — tablet scale-up (iPad / iPad Pro) ─── */
+@media (min-width: 768px) and (max-width: 1366px) {
+  .join-modal {
+    max-width: 560px;
+  }
+  .join-modal h2 {
+    font-size: 1.875rem; /* 30px */
+  }
+  .join-modal .modal-intro {
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .join-modal form {
+    gap: 18px;
+  }
+  .join-modal label {
+    font-size: 11px;
+  }
+  .join-modal input,
+  .join-modal select {
+    font-size: 15px;
+  }
+  .join-modal .consent-text {
+    font-size: 13px;
+  }
+  .join-modal .submit-btn {
+    font-size: 0.75rem;
+    height: 3rem;
+  }
+
+  /* ─── Carousel content — tablet scale-up ─── */
+  .carousel-content {
+    max-width: 640px !important;
+    padding: 0 40px !important;
+  }
+  .carousel-title {
+    font-size: 64px !important;
+    letter-spacing: 0.28em !important;
+    margin-right: -0.28em !important;
+  }
+  .carousel-bar {
+    margin-top: 1.5rem !important;
+    width: 5rem !important;
+  }
+  .carousel-desc {
+    font-size: 19px !important;
+    line-height: 1.85 !important;
+    margin-top: 36px !important;
+    max-width: 520px !important;
+    padding: 0 16px !important;
+  }
+  .carousel-cta {
+    font-size: 13px !important;
+    padding-left: 56px !important;
+    padding-right: 56px !important;
+    height: 50px !important;
+    margin-top: 40px !important;
+  }
+  .carousel-tap {
+    font-size: 13px !important;
+    letter-spacing: 0.24em !important;
+  }
 }
